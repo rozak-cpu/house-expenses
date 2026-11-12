@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ระบบบันทึกค่าใช้จ่ายสร้างบ้าน</title>
+  
+  <!-- Font Kanit & Tailwind CSS CDN -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Anime.js CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
+
+  <style>
+    body {
+      font-family: 'Kanit', sans-serif;
+      background-color: #f8fafc;
+    }
+  </style>
+</head>
+<body class="pb-24 text-slate-800 min-h-screen">
+
+  <!-- Header Section -->
+  <header class="bg-indigo-600 text-white p-5 shadow-lg rounded-b-3xl">
+    <div class="max-w-md mx-auto">
+      <div class="flex justify-between items-center mb-4">
+        <h1 class="text-xl font-semibold flex items-center gap-2">
+          <span>🏠</span> บันทึกค่าสร้างบ้าน
+        </h1>
+        <span class="text-xs bg-indigo-500/60 px-3 py-1 rounded-full border border-indigo-400/30">Google Sheets Sync</span>
+      </div>
+      
+      <!-- Summary Cards -->
+      <div class="grid grid-cols-2 gap-3 mt-2">
+        <div class="bg-white/10 backdrop-blur-md p-3.5 rounded-2xl border border-white/20">
+          <p class="text-indigo-200 text-xs">งบประมาณรวม</p>
+          <p class="text-lg font-bold mt-1" id="totalBudget">฿0</p>
+        </div>
+        <div class="bg-white/10 backdrop-blur-md p-3.5 rounded-2xl border border-white/20">
+          <p class="text-indigo-200 text-xs">จ่ายไปแล้วทั้งหมด</p>
+          <p class="text-lg font-bold mt-1 text-amber-300" id="totalExpenses">฿0</p>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Content Section -->
+  <main class="max-w-md mx-auto p-4 space-y-5">
+    
+    <!-- Action Cards / Form -->
+    <section class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100" id="formCard">
+      <h2 class="text-base font-semibold mb-3 text-slate-700 flex items-center gap-2">
+        <span>➕</span> เพิ่มรายการใหม่
+      </h2>
+      <form id="expenseForm" class="space-y-3">
+        <div>
+          <label class="block text-xs text-slate-500 mb-1">หมวดหมู่</label>
+          <select id="category" class="w-full bg-slate-50 border border-slate-200 p-2.5 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <option value="โครงสร้าง">🏗️ โครงสร้าง / ปูน / เหล็ก</option>
+            <option value="ค่าแรง">👷 ค่าแรงช่าง</option>
+            <option value="ตกแต่ง">🎨 ตกแต่ง / เฟอร์นิเจอร์</option>
+            <option value="ระบบน้ำไฟ">⚡ ระบบไฟฟ้า / ประปา</option>
+            <option value="อื่นๆ">📦 อื่นๆ</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs text-slate-500 mb-1">รายละเอียดรายการ</label>
+          <input type="text" id="title" placeholder="เช่น ค่าเสาเข็ม, ค่าสีกระเบื้อง" required class="w-full bg-slate-50 border border-slate-200 p-2.5 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
+        <div>
+          <label class="block text-xs text-slate-500 mb-1">จำนวนเงิน (บาท)</label>
+          <input type="number" id="amount" placeholder="0.00" step="0.01" required class="w-full bg-slate-50 border border-slate-200 p-2.5 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
+        <button type="submit" id="btnSubmit" class="w-full bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white py-3 rounded-xl font-medium text-sm transition-all duration-200 shadow-md shadow-indigo-200 flex items-center justify-center gap-2">
+          <span>บันทึกลงชีต</span>
+        </button>
+      </form>
+    </section>
+
+    <!-- Recent Expenses List -->
+    <section class="space-y-3">
+      <div class="flex justify-between items-center px-1">
+        <h3 class="text-sm font-semibold text-slate-600">ประวัติรายการล่าสุด</h3>
+        <span class="text-xs text-slate-400" id="itemCount">0 รายการ</span>
+      </div>
+      
+      <div id="expenseList" class="space-y-2.5">
+        <!-- Dynamic Items populated by JS -->
+      </div>
+    </section>
+  </main>
+
+  <!-- Anime.js & Web App Logic -->
+  <script>
+    // URL ของ Google Apps Script Web App (เปลี่ยนเป็นของคุณ)
+    const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyq44qIlp1xoigyZHB7pWJlFl3GDx3MicTumk_sgSTS6Tig4ZHTv9cPC9iA1SkZ2GCvRg/exec';
+
+    // 1. Lightweight Anime.js Animations (เน้นความลื่นไหล สมดุล ไม่หนักเครื่อง)
+    document.addEventListener('DOMContentLoaded', () => {
+      // Entrance Animation
+      anime({
+        targets: ['header', '#formCard'],
+        translateY: [-20, 0],
+        opacity: [0, 1],
+        delay: anime.stagger(120),
+        duration: 700,
+        easing: 'easeOutQuad'
+      });
+
+      // Count Up Animation สำหรับตัวเลขยอดเงิน
+      animateCounter('#totalExpenses', 145200);
+      animateCounter('#totalBudget', 2500000);
+    });
+
+    function animateCounter(selector, targetValue) {
+      let obj = { val: 0 };
+      anime({
+        targets: obj,
+        val: targetValue,
+        round: 1,
+        duration: 1200,
+        easing: 'easeOutExpo',
+        update: function() {
+          document.querySelector(selector).innerHTML = '฿' + Number(obj.val).toLocaleString();
+        }
+      });
+    }
+
+    // 2. Form Submission with Feedback Animation
+    const form = document.getElementById('expenseForm');
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const btn = document.getElementById('btnSubmit');
+      btn.disabled = true;
+      btn.innerText = 'กำลังบันทึก...';
+
+      const payload = {
+        category: document.getElementById('category').value,
+        title: document.getElementById('title').value,
+        amount: parseFloat(document.getElementById('amount').value),
+        date: new Date().toLocaleDateString('th-TH')
+      };
+
+      try {
+        // ส่งข้อมูลไปยัง Google Apps Script
+        if (WEB_APP_URL !== 'YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL') {
+          await fetch(WEB_APP_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+        }
+
+        // Pulse Animation เมื่อบันทึกสำเร็จ
+        anime({
+          targets: '#formCard',
+          scale: [1, 1.02, 1],
+          duration: 350,
+          easing: 'easeInOutQuad'
+        });
+
+        // Add item to local UI list
+        addExpenseToList(payload);
+        form.reset();
+
+      } catch (err) {
+        console.error('Error saving:', err);
+      } finally {
+        btn.disabled = false;
+        btn.innerText = 'บันทึกลงชีต';
+      }
+    });
+
+    function addExpenseToList(item) {
+      const list = document.getElementById('expenseList');
+      const div = document.createElement('div');
+      div.className = 'expense-item bg-white p-3.5 rounded-xl shadow-sm border border-slate-100 flex justify-between items-center opacity-0';
+      div.innerHTML = `
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-sm">
+            ${item.category.slice(0, 2)}
+          </div>
+          <div>
+            <p class="text-sm font-medium text-slate-800">${item.title}</p>
+            <p class="text-xs text-slate-400">${item.category} • ${item.date}</p>
+          </div>
+        </div>
+        <p class="text-sm font-semibold text-slate-700">฿${Number(item.amount).toLocaleString()}</p>
+      `;
+
+      list.prepend(div);
+
+      // Slide In Animation สำหรับรายการใหม่
+      anime({
+        targets: div,
+        translateX: [-30, 0],
+        opacity: [0, 1],
+        duration: 450,
+        easing: 'easeOutCubic'
+      });
+    }
+  </script>
+</body>
+</html>
